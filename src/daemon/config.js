@@ -78,6 +78,27 @@ function writeConfigFile (ipfsd, config) {
   fs.writeJsonSync(getConfigFilePath(ipfsd), config, { spaces: 2 })
 }
 
+// Caps how long kubo may spend shutting down gracefully. It has to stay
+// below the 60s deadline in ipfsd-ctl's stop(), after which the daemon is
+// SIGKILLed: reaching our own cap first means kubo logs which subsystem is
+// stuck and exits on its own terms, instead of dying without a trace.
+// Kubo's own default is 12h, sized for servers, so quitting the app would
+// otherwise always wait the full 60s on a hung subsystem.
+// This is a starting value, not a lock: set Internal.ShutdownTimeout in the
+// kubo config to anything you prefer and IPFS Desktop will leave it alone.
+const DEFAULT_SHUTDOWN_TIMEOUT = '50s'
+
+// Which blocks the node announces to the DHT. Kubo defaults to "all", which
+// includes everything fetched while browsing, so a laptop ends up announcing
+// content the user never chose to host. Announce what they did choose: their
+// recursive pins plus the local part of MFS, which is what the Files and Pins
+// screens produce. "+unique" bloom-filters CIDs shared between pins so the
+// reprovide cycle does not walk them repeatedly.
+// This is a starting value, not a lock: set Provide.Strategy in the kubo
+// config to anything you prefer and IPFS Desktop will leave it alone.
+// https://github.com/ipfs/kubo/blob/master/docs/config.md#providestrategy
+const DEFAULT_PROVIDE_STRATEGY = 'pinned+mfs+unique'
+
 /**
  * Set default minimum and maximum of connections to maintain
  * by default. This must only be called for repositories created
@@ -96,12 +117,18 @@ function applyDefaults (ipfsd) {
   config.Swarm.DisableNatPortMap = false // uPnP
   config.Swarm.ConnMgr = config.Swarm.ConnMgr ?? {}
 
+  config.Provide = config.Provide ?? {}
+  config.Provide.Strategy = DEFAULT_PROVIDE_STRATEGY
+
   config.Discovery = config.Discovery ?? {}
   config.Discovery.MDNS = config.Discovery.MDNS ?? {}
   config.Discovery.MDNS.Enabled = true
 
   config.AutoTLS = config.AutoTLS ?? {}
   config.AutoTLS.Enabled = true
+
+  config.Internal = config.Internal ?? {}
+  config.Internal.ShutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT
 
   writeConfigFile(ipfsd, config)
 }
@@ -153,7 +180,7 @@ const getGatewayPort = (config) => getHttpPort(config.Addresses.Gateway)
  */
 function migrateConfig (ipfsd) {
   // Bump revision number when new migration rule is added
-  const REVISION = 6
+  const REVISION = 7
   const REVISION_KEY = 'daemonConfigRevision'
   const CURRENT_REVISION = store.get(REVISION_KEY, 0)
 
@@ -250,6 +277,29 @@ function migrateConfig (ipfsd) {
     }
     if (config.AutoTLS.Enabled === undefined) {
       config.AutoTLS.Enabled = true
+      changed = true
+    }
+  }
+
+  if (CURRENT_REVISION < 7) {
+    // Cap graceful shutdown if there is no explicit user preference
+    if (config.Internal === undefined) {
+      config.Internal = {}
+      changed = true
+    }
+    if (config.Internal.ShutdownTimeout === undefined) {
+      config.Internal.ShutdownTimeout = DEFAULT_SHUTDOWN_TIMEOUT
+      changed = true
+    }
+
+    // Announce only explicitly kept content if there is no explicit user
+    // preference. An unset Strategy means kubo's "all" was in effect, which
+    // the user never asked for. A repo old enough to still carry the removed
+    // Reprovider.Strategy is left alone: kubo's own repo migration moves that
+    // value into Provide.Strategy, and it is a preference either way.
+    if (config.Reprovider?.Strategy === undefined && config.Provide?.Strategy === undefined) {
+      config.Provide = config.Provide ?? {}
+      config.Provide.Strategy = DEFAULT_PROVIDE_STRATEGY
       changed = true
     }
   }
