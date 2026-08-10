@@ -41,6 +41,45 @@ test.describe('generateErrorIssueUrl', () => {
     expect(url).toBe('https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#i-got-a-repolock-error-how-do-i-resolve-this')
   })
 
+  test.describe('known error routing', () => {
+    const cases = [
+      ['missing repo config on Unix', 'SyntaxError: Unexpected end of JSON input: Error: open /home/u/.ipfs/config: no such file or directory\n    at Daemon._getConfig (ipfsd-daemon.js:368:21)', 'https://github.com/ipfs/ipfs-desktop/issues/2259#issuecomment-1239275950'],
+      ['missing repo config on Windows', 'SyntaxError: Unexpected end of JSON input: Error: open C:\\Users\\u\\.ipfs\\config: The system cannot find the file specified.\n    at Daemon._getConfig (ipfsd-daemon.js:368:21)', 'https://github.com/ipfs/ipfs-desktop/issues/2259#issuecomment-1239275950'],
+      ['corrupted repo config', 'SyntaxError: C:\\Users\\u\\.ipfs\\config: Unexpected end of JSON input\n    at Object.readFileSync (jsonfile/index.js:52:17)\n    at readConfigFile (src/daemon/config.js:68:13)', 'https://github.com/ipfs/ipfs-desktop/issues/2849#issuecomment-2344641734'],
+      ['kubo config key removed', 'Error: Initializing daemon...\nFATAL\tcmd/ipfs\tExperimental.StrategicProviding was removed. Remove it from your config.', 'https://github.com/ipfs/ipfs-desktop/issues/2937#issuecomment-2761563438'],
+      ['kubo config decode failure', 'Error: Initializing daemon...\nError: failure to decode config: json: unknown field', 'https://github.com/ipfs/ipfs-desktop/issues/2937#issuecomment-2761563438'],
+      ['hostname in an /ip4/ multiaddr', 'Error: invalid ip address\n    at ip2bytes (multiaddr/src/convert.js:106:11)', 'https://github.com/ipfs/ipfs-desktop/issues/2767#issuecomment-2163279665'],
+      ['corrupted MFS root block', 'Error: error loading filesroot from dagservice: proto: invalid field number', 'https://github.com/ipfs/ipfs-desktop/issues/2882#issuecomment-2658038042'],
+      ['windows refusing to run the bundled binary', 'Error: Command failed with EFTYPE: ipfs.exe daemon\nspawn EFTYPE\n    at ChildProcess.spawn (node:internal/child_process:421:11)', 'https://github.com/ipfs/ipfs-desktop/issues/3130#issuecomment-4391915927'],
+      ['missing tray icon asset', "Error: Failed to load image from path '/opt/IPFS Desktop/resources/app.asar/assets/icons/tray/others/off-large.png'", 'https://github.com/ipfs/ipfs-desktop/issues/2471#issuecomment-1532503722'],
+      ['macOS VPN breaking the go resolver', 'fatal error: invalid return from write: got 33554436, want 4', 'https://github.com/ipfs/ipfs-desktop/issues/2996#issuecomment-3352281827'],
+      ['disk full on Unix', 'Error: ENOSPC: no space left on device, write', 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'],
+      ['disk full on Windows', 'Error: write C:\\Users\\u\\.ipfs\\datastore\\000235.ldb: There is not enough space on the disk.', 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'],
+      ['kubo binary never downloaded', 'Error: kubo binary not found, it may not be installed', 'https://github.com/ipfs/ipfs-desktop/issues/3031#issuecomment-4826112152']
+    ]
+
+    for (const [name, stack, url] of cases) {
+      test(name, () => {
+        expect(generateErrorIssueUrl({ stack })).toBe(url)
+      })
+    }
+
+    test('the specific missing-block answer still wins over the general MFS root failure', () => {
+      const stack = 'Error: error loading filesroot from dagservice: block was not found locally (offline): ipld: could not find QmFoo'
+      expect(generateErrorIssueUrl({ stack })).toBe('https://github.com/ipfs/ipfs-desktop/issues/2882#issuecomment-2658038042')
+    })
+
+    test('the specific AcceleratedDHTClient answer still wins over the general decode failure', () => {
+      const stack = 'Error: failure to decode config: The Experimental.AcceleratedDHTClient key has been moved to Routing.AcceleratedDHTClient'
+      expect(generateErrorIssueUrl({ stack })).toBe('https://github.com/ipfs/ipfs-desktop/issues/2961#issuecomment-3083916364')
+    })
+
+    test('a readConfigFile frame without a SyntaxError is not treated as a corrupt config', () => {
+      const stack = "Error: EACCES: permission denied, open '/home/u/.ipfs/config'\n    at readConfigFile (src/daemon/config.js:68:13)"
+      expect(generateErrorIssueUrl({ stack })).toContain('https://github.com/ipfs/ipfs-desktop/issues/new')
+    })
+  })
+
   test('produces a new-issue URL for unknown errors', () => {
     const e = { stack: 'Error: something we have not seen before\n    at fn (file.js:1:1)' }
     const url = generateErrorIssueUrl(e)

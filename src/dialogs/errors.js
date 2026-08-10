@@ -121,6 +121,29 @@ function generateErrorIssueUrl (e) {
         return 'https://github.com/ipfs/ipfs-desktop/issues/2964#issuecomment-3083882607'
       case stack.includes('failure to decode config: The Experimental.AcceleratedDHTClient key has been moved to Routing.AcceleratedDHTClient'):
         return 'https://github.com/ipfs/ipfs-desktop/issues/2961#issuecomment-3083916364'
+      case stack.includes('config: The system cannot find the file specified'):
+      case stack.includes('config: no such file or directory'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2259#issuecomment-1239275950'
+      case stack.startsWith('SyntaxError') && stack.includes('at readConfigFile ('):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2849#issuecomment-2344641734'
+      case stack.includes('was removed. Remove it from your config.'):
+      case stack.includes('failure to decode config:'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2937#issuecomment-2761563438'
+      case stack.includes('at ip2bytes ('):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2767#issuecomment-2163279665'
+      case stack.includes('error loading filesroot from dagservice'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2882#issuecomment-2658038042'
+      case stack.includes('spawn EFTYPE'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/3130#issuecomment-4391915927'
+      case stack.includes('Failed to load image from path'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2471#issuecomment-1532503722'
+      case stack.includes('invalid return from write: got'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2996#issuecomment-3352281827'
+      case stack.includes('no space left on device'):
+      case stack.includes('There is not enough space on the disk'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'
+      case stack.includes('kubo binary not found, it may not be installed'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/3031#issuecomment-4826112152'
     }
   }
   // Something else, prefill new issue form with error details
