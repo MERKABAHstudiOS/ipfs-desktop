@@ -78,10 +78,24 @@ function generateBugReportUrl (e) {
 
 let hasErrored = false
 
+// Oldest OS release Electron and Kubo still build for, as NT and Darwin
+// major versions. Electron 23 dropped Windows 7, 8 and 8.1; current Electron
+// needs macOS 12 Monterey. Below either floor nothing else in the stack can
+// be the real problem. https://github.com/electron/electron#platform-support
+const OLDEST_SUPPORTED_NT = 10 // Windows 10
+const OLDEST_SUPPORTED_DARWIN = 21 // macOS 12 Monterey
+
+function isUnsupportedOs () {
+  const major = parseInt(os.release(), 10)
+  if (os.platform() === 'win32') return major < OLDEST_SUPPORTED_NT
+  if (os.platform() === 'darwin') return major < OLDEST_SUPPORTED_DARWIN
+  return false
+}
+
 function generateErrorIssueUrl (e) {
   // Check if OS is supported at all
-  if (os.platform() === 'win32' && os.release().startsWith('6.1.')) {
-    return 'https://github.com/ipfs/ipfs-desktop/issues/2823#issuecomment-2163182898' // Windows 7 EOL
+  if (isUnsupportedOs()) {
+    return 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#which-operating-systems-are-supported'
   }
   // Check if error is one we have FAQ for
   if (e && e.stack) {
@@ -89,6 +103,8 @@ function generateErrorIssueUrl (e) {
     switch (true) {
       case stack.includes('repo.lock'):
         return 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#i-got-a-repolock-error-how-do-i-resolve-this'
+      case stack.includes('Failed to download migrations.'):
+        return 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#found-outdated-fs-repo-migrations-need-to-be-run---error-fetching-context-deadline-exceeded'
       case stack.includes('Error fetching'):
         return 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#i-got-a-network-error-eg-error-fetching-what-should-i-do'
       case stack.includes('private key in config does not match id'):
@@ -105,10 +121,10 @@ function generateErrorIssueUrl (e) {
         return 'https://github.com/ipfs/ipfs-desktop/issues/2425#issuecomment-1457250858'
       case stack.includes('config: The system cannot find the path specified'):
         return 'https://github.com/ipfs/ipfs-desktop/issues/2259#issuecomment-1239275950'
-      case stack.includes('bind: address already in use'):
-        return 'https://github.com/ipfs/ipfs-desktop/issues/2216#issuecomment-1199189648'
       case stack.includes('5001: bind: address already in use'):
         return 'https://github.com/ipfs/ipfs-desktop/issues/2216'
+      case stack.includes('bind: address already in use'):
+        return 'https://github.com/ipfs/ipfs-desktop/issues/2216#issuecomment-1199189648'
       case stack.includes('Only one usage of each socket address (protocol/network address/port) is normally permitted'):
         return 'https://github.com/ipfs/ipfs-desktop/issues/2932#issuecomment-3083947021'
       case stack.includes('Get-AuthenticodeSignature'):
@@ -144,6 +160,8 @@ function generateErrorIssueUrl (e) {
         return 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'
       case stack.includes('kubo binary not found, it may not be installed'):
         return 'https://github.com/ipfs/ipfs-desktop/issues/3031#issuecomment-4826112152'
+      case stack.includes('ipfs daemon failed to start and produced no output'):
+        return 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#the-daemon-failed-to-start-and-produced-no-output-what-now'
     }
   }
   // Something else, prefill new issue form with error details

@@ -22,6 +22,17 @@ const { generateErrorIssueUrl } = proxyquire('../../src/dialogs/errors', {
   './dialog': () => 0
 })
 
+// The OS check reads os.platform()/os.release() at call time, so each
+// platform under test needs its own module instance with os stubbed out.
+function errorsOn (platform, release) {
+  return proxyquire('../../src/dialogs/errors', {
+    electron: electronMock,
+    i18next: i18nMock,
+    './dialog': () => 0,
+    os: { platform: () => platform, release: () => release, arch: () => 'x64' }
+  })
+}
+
 const MAX_URL_LENGTH = 8000
 
 function decodeBody (url) {
@@ -55,7 +66,9 @@ test.describe('generateErrorIssueUrl', () => {
       ['macOS VPN breaking the go resolver', 'fatal error: invalid return from write: got 33554436, want 4', 'https://github.com/ipfs/ipfs-desktop/issues/2996#issuecomment-3352281827'],
       ['disk full on Unix', 'Error: ENOSPC: no space left on device, write', 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'],
       ['disk full on Windows', 'Error: write C:\\Users\\u\\.ipfs\\datastore\\000235.ldb: There is not enough space on the disk.', 'https://github.com/ipfs/ipfs-desktop/issues/3136#issuecomment-4106711346'],
-      ['kubo binary never downloaded', 'Error: kubo binary not found, it may not be installed', 'https://github.com/ipfs/ipfs-desktop/issues/3031#issuecomment-4826112152']
+      ['kubo binary never downloaded', 'Error: kubo binary not found, it may not be installed', 'https://github.com/ipfs/ipfs-desktop/issues/3031#issuecomment-4826112152'],
+      ['daemon exited without printing anything', 'Error: ipfs daemon failed to start and produced no output (see error.log for details)\n    at errorTemplate (src/daemon/migration-prompt.js:100:49)', 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#the-daemon-failed-to-start-and-produced-no-output-what-now'],
+      ['migration download gave up', 'Error: Initializing daemon...\nFailed to download migrations.\nError fetching: context deadline exceeded', 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#found-outdated-fs-repo-migrations-need-to-be-run---error-fetching-context-deadline-exceeded']
     ]
 
     for (const [name, stack, url] of cases) {
@@ -77,6 +90,53 @@ test.describe('generateErrorIssueUrl', () => {
     test('a readConfigFile frame without a SyntaxError is not treated as a corrupt config', () => {
       const stack = "Error: EACCES: permission denied, open '/home/u/.ipfs/config'\n    at readConfigFile (src/daemon/config.js:68:13)"
       expect(generateErrorIssueUrl({ stack })).toContain('https://github.com/ipfs/ipfs-desktop/issues/new')
+    })
+
+    test('port 5001 wins over the generic bind failure', () => {
+      const stack = 'Error: serveHTTPApi: manet.Listen(/ip4/127.0.0.1/tcp/5001) failed: listen tcp4 127.0.0.1:5001: bind: address already in use'
+      expect(generateErrorIssueUrl({ stack })).toBe('https://github.com/ipfs/ipfs-desktop/issues/2216')
+    })
+
+    test('a bind failure on any other port keeps the general answer', () => {
+      const stack = 'Error: serveHTTPGateway: manet.Listen(/ip4/127.0.0.1/tcp/8080) failed: listen tcp4 127.0.0.1:8080: bind: address already in use'
+      expect(generateErrorIssueUrl({ stack })).toBe('https://github.com/ipfs/ipfs-desktop/issues/2216#issuecomment-1199189648')
+    })
+  })
+
+  test.describe('unsupported operating systems', () => {
+    const OS_FAQ = 'https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#which-operating-systems-are-supported'
+
+    for (const [platform, release, name] of [
+      ['win32', '6.1.7601', 'Windows 7'],
+      ['win32', '6.2.9200', 'Windows 8'],
+      ['win32', '6.3.9600', 'Windows 8.1'],
+      ['darwin', '19.6.0', 'macOS 10.15 Catalina'],
+      ['darwin', '20.6.0', 'macOS 11 Big Sur']
+    ]) {
+      test(`${name} is sent to the OS support table`, () => {
+        expect(errorsOn(platform, release).generateErrorIssueUrl({ stack: 'Error: anything' })).toBe(OS_FAQ)
+      })
+    }
+
+    test('an old OS is reported even when the error carries no stack', () => {
+      expect(errorsOn('win32', '6.1.7601').generateErrorIssueUrl({})).toBe(OS_FAQ)
+    })
+
+    for (const [platform, release, name] of [
+      ['win32', '10.0.19045', 'Windows 10'],
+      ['win32', '10.0.26100', 'Windows 11'],
+      ['darwin', '21.6.0', 'macOS 12 Monterey'],
+      ['darwin', '24.6.0', 'macOS 15'],
+      ['linux', '6.8.0-49-generic', 'Linux']
+    ]) {
+      test(`${name} still gets a prefilled bug report`, () => {
+        expect(errorsOn(platform, release).generateErrorIssueUrl({ stack: 'Error: anything' })).toContain('https://github.com/ipfs/ipfs-desktop/issues/new')
+      })
+    }
+
+    test('a recognised error on a supported OS still routes to its answer', () => {
+      const url = errorsOn('win32', '10.0.19045').generateErrorIssueUrl({ stack: 'Error: repo.lock is held' })
+      expect(url).toBe('https://github.com/ipfs/ipfs-desktop?tab=readme-ov-file#i-got-a-repolock-error-how-do-i-resolve-this')
     })
   })
 
