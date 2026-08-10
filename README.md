@@ -52,6 +52,7 @@ When in doubt, pick one of package formats with built-in automatic update mechan
     - [IPFS Desktop configuration](#ipfs-desktop-configuration)
     - [Kubo repository and configuration](#kubo-repository-and-configuration)
       - [How does IPFS Desktop select the IPFS repo location?](#how-does-ipfs-desktop-select-the-ipfs-repo-location)
+  - [Which operating systems are supported?](#which-operating-systems-are-supported)
   - [Which version of IPFS does IPFS Desktop use?](#which-version-of-ipfs-does-ipfs-desktop-use)
   - [Which flags does IPFS Desktop boot with?](#which-flags-does-ipfs-desktop-boot-with)
   - [I got a `repo.lock` error. How do I resolve this?](#i-got-a-repolock-error-how-do-i-resolve-this)
@@ -59,6 +60,7 @@ When in doubt, pick one of package formats with built-in automatic update mechan
   - [Error: Initializing daemon...](#error-initializing-daemon)
     - [Error: Your programs version (N) is lower than your repos (N+x).](#error-your-programs-version-n-is-lower-than-your-repos-nx)
     - [Found outdated fs-repo, migrations need to be run. - Error fetching: context deadline exceeded](#found-outdated-fs-repo-migrations-need-to-be-run---error-fetching-context-deadline-exceeded)
+  - [The daemon failed to start and produced no output. What now?](#the-daemon-failed-to-start-and-produced-no-output-what-now)
   - [I need more help!](#i-need-more-help)
 - [License](#license)
 
@@ -217,9 +219,9 @@ If you've noticed that the old system tray is back in IPFS Desktop v0.13, this i
 
 ### Why can't I install IPFS Desktop under Debian 11?
 
-Debian package depends on `libappindicator3-1` which does not exist in Debian 11 anymore.
+You can. `libappindicator3-1`, which no longer exists in Debian 11 and later, moved from `Depends` to `Recommends` in electron-builder, so apt installs and configures the package without it.
 
-You need to install this missing dependency [on your own](https://gist.github.com/keyle/b4536dc922bb13d7b5dce16a7db7e328), or use `.AppImage` instead.
+The library is still what draws the system tray icon. If the icon is missing after install, either install it [on your own](https://gist.github.com/keyle/b4536dc922bb13d7b5dce16a7db7e328) or use `.AppImage` instead.
 
 ### Why can't I start IPFS Desktop under Debian 10?
 
@@ -240,6 +242,8 @@ This is a known issue with Electron/Chrome and some hardened kernels. More detai
 ```console
 $ ipfs-desktop --no-sandbox
 ```
+
+The same error shows up on Ubuntu 24.04 and later, which restrict unprivileged user namespaces through AppArmor. It is most visible with the `.AppImage`, because its read-only mount cannot present `chrome-sandbox` as root-owned with mode 4755. To keep the sandbox, use the `.deb` instead: its post-install script sets the `chrome-sandbox` permissions to match your kernel and installs an AppArmor profile.
 
 ### Why does the AppImage fail with a FUSE error?
 
@@ -310,6 +314,18 @@ IPFS Desktop uses [ipfsd-ctl](https://github.com/ipfs/js-ipfsd-ctl) to locate Ku
 2. If that isn't set, it falls back to `$HOME/.ipfs` (`%USERPROFILE%/.ipfs/` on Windows). As soon as the first run has succeeded, repository location info is saved in the configuration file, which becomes the source of truth.
 
 To open your Kubo repo directory from the IPFS logo menu, select `Open Repository Directory` from the `Advanced` submenu.
+
+### Which operating systems are supported?
+
+| OS | Minimum version |
+|----|-----------------|
+| macOS | 12 Monterey, Intel and Apple Silicon |
+| Windows | 10, x64 and arm64 |
+| Linux | any release still supported by the distribution maker, x64 |
+
+This floor is set by [Electron](https://github.com/electron/electron#platform-support), which IPFS Desktop is built on, and by Go, which Kubo is built with. Neither ships binaries for older releases, so IPFS Desktop cannot start there even when the installer itself succeeds. Windows 7 is the one people hit most often, explained in more detail in [#2823](https://github.com/ipfs/ipfs-desktop/issues/2823#issuecomment-2163182898).
+
+Older IPFS Desktop builds are still on the [releases page](https://github.com/ipfs/ipfs-desktop/releases), but they get no fixes. If you are stuck on an older OS, the [IPFS forums](https://discuss.ipfs.tech/c/help/13) are the best place to ask.
 
 ### Which version of IPFS does IPFS Desktop use?
 
@@ -396,6 +412,20 @@ ipfs config --json Migration.DownloadSources '["IPFS", "https://trustless-gatewa
 ##### Manually in an editor (not recommended)
 
 You can also edit the config file (`~/.ipfs/config` or `C:\Users\Username\.ipfs\config`) manually. Just make sure the json file is valid when you finish.
+
+### The daemon failed to start and produced no output. What now?
+
+This message means IPFS Desktop started the Kubo daemon, the daemon exited immediately, and it printed nothing on its way out. The cause is not in the message, so an issue that only quotes it cannot be acted on.
+
+The real error is in `error.log`. Open the IPFS logo menu, select `Open Logs Directory` from the `Advanced` submenu, and read the end of that file.
+
+The usual causes are:
+
+- antivirus or endpoint security removed, quarantined or blocked the bundled `ipfs` binary
+- the [Kubo repository](#kubo-repository-and-configuration) sits on a disk that is full, read-only, or no longer connected
+- another `ipfs` process is already using the same repository
+
+If the log points at one of the errors covered above, follow that section. Otherwise [open an issue](https://github.com/ipfs/ipfs-desktop/issues/new/choose) and paste the last 50 lines of `error.log` into it.
 
 ### I need more help!
 
